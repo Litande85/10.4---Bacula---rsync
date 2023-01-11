@@ -46,7 +46,50 @@
 
 ### *<a name="2"> Ответ к Заданию 2 </a>*
 
+Устанавливаем документацию
 
+Установка Bacula 
+
+```bash
+sudo apt install bacula postgresql 
+```
+
+В ходе установки потребуется выбрать, где будет база данных, выберем localhost. Далее установка пароля для входа, можно установить любой (главное запомнить).
+
+
+Проверяем, что сервисы запущены
+
+```bash
+sudo service --status-all | grep bacula
+```
+
+stdout
+
+```bash
+ [ + ]  bacula-director
+ [ + ]  bacula-fd
+ [ + ]  bacula-sd
+```
+
+Смотрим документацию
+
+```bash
+cd /usr/share/doc/bacula-doc/
+cat ./bacula-director/examples/conf/console.conf # примеры конфигураций
+```
+
+
+Настройка Bacula Director (сервис bacula-dir) — основной сервис, который управляет всеми другими процессами по резервному копированию и восстановлению; 
+
+Bacula Storage (сервис bacula-sd) — хранилище, предназначенное для сохранения резервных копий на диске; 
+
+Bacula File Daemon (сервис bacula-fd) — клиентская часть сервиса, которая нужна для доступа к файлам на сервере, с которого будет выполняться резервное копирование
+
+
+
+Использованные источники:
+
+\- [Презентация "Отказоустойчивость: Резервное копирование. Bacula", Александр Зубарев](https://u.netology.ru/backend/uploads/lms/attachments/files/data/27925/SRLB-9__%D0%A0%D0%B5%D0%B7%D0%B5%D1%80%D0%B2%D0%BD%D0%BE%D0%B5_%D0%BA%D0%BE%D0%BF%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5._Bacula.pdf)
 ---
 
 ### Задание 3
