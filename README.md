@@ -461,3 +461,11 @@ Stdout
 ### *<a name="4"> Ответ к Заданию 4* </a>*
 
 
+Использованные источники:
+
+\- https://www.bacula.org/13.0.x-manuals/en/main/Brief_Tutorial.html
+
+\- [itsecforu.ru/2018/02/27/bacula-резервное-копирование-с-открытым-ис](https://itsecforu.ru/2018/02/27/bacula-%d1%80%d0%b5%d0%b7%d0%b5%d1%80%d0%b2%d0%bd%d0%be%d0%b5-%d0%ba%d0%be%d0%bf%d0%b8%d1%80%d0%be%d0%b2%d0%b0%d0%bd%d0%b8%d0%b5-%d1%81-%d0%be%d1%82%d0%ba%d1%80%d1%8b%d1%82%d1%8b%d0%bc-%d0%b8%d1%81/)
+
+\- https://antiskleroz.pp.ua/it/bacula
+
