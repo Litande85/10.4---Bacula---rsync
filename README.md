@@ -119,14 +119,14 @@ Director {
 }
 
 Device {
-  Name = FileChgr1-Dev1
-  Media Type = File1
-  Archive Device = /home/user/backup
+  Name = Local-Device
+  Media Type = File
+  Archive Device = /bacula
   LabelMedia = yes;                   # lets Bacula label unlabeled media
   Random Access = Yes;
   AutomaticMount = yes;               # when device opened, read it
   RemovableMedia = no;
-  AlwaysOpen = no;
+  AlwaysOpen = yes;
   Maximum Concurrent Jobs = 5
 }
 
@@ -204,69 +204,38 @@ JobDefs {
   Type = Backup
   Level = Incremental
   Client = makhota-vm01-fd
-  FileSet = "Full Set"
+  FileSet = "System"
   Schedule = "WeeklyCycle"
-  Storage = File1
+  Storage = makhota-vm01-sd
   Messages = Standard
-  Pool = File
+  Pool = LocalPool
   SpoolAttributes = yes
   Priority = 10
   Write Bootstrap = "/var/lib/bacula/%c.bsr"
 }
 
-Job {
-  Name = "BackupClient1"
-  JobDefs = "DefaultJob"
-}
 
 Job {
-  Name = "BackupCatalog"
+  Name = "System"
   JobDefs = "DefaultJob"
+  Enabled = yes
   Level = Full
-  FileSet="Catalog"
-  Schedule = "WeeklyCycleAfterBackup"
-  # This creates an ASCII copy of the catalog
-  # Arguments to make_catalog_backup.pl are:
-  #  make_catalog_backup.pl <catalog-name>
-  RunBeforeJob = "/etc/bacula/scripts/make_catalog_backup.pl MyCatalog"
-  # This deletes the copy of the catalog
-  RunAfterJob  = "/etc/bacula/scripts/delete_catalog_backup"
-  Write Bootstrap = "/var/lib/bacula/%n.bsr"
-  Priority = 11                   # run after main backup
-}
-
-Job {
-  Name = "RestoreFiles"
-  Type = Restore
-  Client=makhota-vm01-fd
-  Storage = File1
-# The FileSet and Pool directives are not used by Restore Jobs
-# but must not be removed
-  FileSet="Full Set"
-  Pool = File
-  Messages = Standard
-  Where = /home/user/bacula-restores
+  FileSet="System"
+  Schedule = "WeeklyCycle"
+  Priority = 11
+  Storage = makhota-vm01-sd
+  Pool = LocalPool
 }
 
 FileSet {
-  Name = "Full Set"
+  Name = "System"
   Include {
     Options {
       signature = MD5
     }
 
-File = /usr/sbin
+File = /etc
   }    
-
-Exclude {
-    File = /var/lib/bacula
-    File = /nonexistant/path/to/file/archive/dir
-    File = /proc
-    File = /tmp
-    File = /sys
-    File = /.journal
-    File = /.fsck
-  }
 }
 
 Schedule {
@@ -274,22 +243,6 @@ Schedule {
   Run = Full 1st sun at 23:05
   Run = Differential 2nd-5th sun at 23:05
   Run = Incremental mon-sat at 23:05
-}
-
-Schedule {
-  Name = "WeeklyCycleAfterBackup"
-  Run = Full sun-sat at 23:10
-}
-
-
-FileSet {
-  Name = "Catalog"
-  Include {
-    Options {
-      signature = MD5
-    }
-    File = "/var/lib/bacula/bacula.sql"
-  }
 }
 
 Client {
@@ -304,28 +257,17 @@ Client {
 }
 
 Autochanger {
-  Name = File1
+  Name = makhota-vm01-sd
 # Do not use "localhost" here
   Address = localhost                # N.B. Use a fully qualified name here
   SDPort = 9103
   Password = "kH3eGQmWACQ6_QXz6_wg1VEmTKpu3jtlW"
-  Device = FileChgr1
-  Media Type = File1
+  Device = Local-Device
+  Media Type = File
   Maximum Concurrent Jobs = 10        # run up to 10 jobs a the same time
-  Autochanger = File1                 # point to ourself
+  Autochanger = makhota-vm01-sd                 # point to ourself
 }
 
-Autochanger {
-  Name = File2
-# Do not use "localhost" here
-  Address = localhost                # N.B. Use a fully qualified name here
-  SDPort = 9103
-  Password = "kH3eGQmWACQ6_QXz6_wg1VEmTKpu3jtlW"
-  Device = FileChgr2
-  Media Type = File2
-  Autochanger = File2                 # point to ourself
-  Maximum Concurrent Jobs = 10        # run up to 10 jobs a the same time
-}
 
 Catalog {
   Name = MyCatalog
@@ -334,7 +276,6 @@ Catalog {
 
 Messages {
   Name = Standard
-
   mailcommand = "/usr/sbin/bsmtp -h localhost -f \"\(Bacula\) \<%r\>\" -s \"Bacula: %t %e of %c %l\" %r"
   operatorcommand = "/usr/sbin/bsmtp -h localhost -f \"\(Bacula\) \<%r\>\" -s \"Bacula: Intervention needed for %j\" %r"
   mail = root = all, !skipped
@@ -343,7 +284,6 @@ Messages {
   append = "/var/log/bacula/bacula.log" = all, !skipped
   catalog = all
 }
-
 
 Messages {
   Name = Daemon
@@ -354,40 +294,23 @@ Messages {
 }
 
 Pool {
-  Name = Default
+  Name = LocalPool
   Pool Type = Backup
   Recycle = yes                       # Bacula can automatically recycle Volumes
   AutoPrune = yes                     # Prune expired volumes
   Volume Retention = 365 days         # one year
-  Maximum Volume Bytes = 50G          # Limit Volume size to something reasonable
+  Maximum Volume Bytes = 10G          # Limit Volume size to something reasonable
   Maximum Volumes = 100               # Limit number of Volumes in Pool
+  Label Format = "Local-"
 }
 
-Pool {
-  Name = File
-  Pool Type = Backup
-  Recycle = yes                       # Bacula can automatically recycle Volumes
-  AutoPrune = yes                     # Prune expired volumes
-  Volume Retention = 365 days         # one year
-  Maximum Volume Bytes = 50G          # Limit Volume size to something reasonable
-  Maximum Volumes = 100               # Limit number of Volumes in Pool
-  Label Format = "Vol-"               # Auto label
-}
 
-# Scratch pool definition
-Pool {
-  Name = Scratch
-  Pool Type = Backup
-}
-
-#
-# Restricted console used by tray-monitor to get the status of the director
-#
 Console {
   Name = makhota-vm01-mon
   Password = "3AFL0oYpT0HNNGROPsl9tNNZtz51Pmds8"
   CommandACL = status, .status
 }
+
 
 ```
 
@@ -397,11 +320,10 @@ Console {
 sudo /usr/sbin/bacula-dir -t -c /etc/bacula/bacula-dir.conf
 ```
 
-Посмотреть логи
+Связи паролей и имен:
 
-```bash 
-sudo cat /var/log/bacula/bacula.log
-```
+![pass](img/pass%202023-01-18%20205756.png)
+
 
 Перезапускаем службы
 
@@ -411,7 +333,100 @@ sudo systemctl restart bacula-fd
 sudo systemctl restart bacula-dir
 ```
 
-Входим в консоль `bconsole`, можно посмотреть `help`, `status`
+Входим в консоль `bconsole`, можно посмотреть `help`, `status`.
+
+Вводим `mount`,
+
+stdout
+
+```bash
+Automatically selected Catalog: MyCatalog
+Using Catalog "MyCatalog"
+Automatically selected Storage: makhota-vm01-sd
+Connecting to Storage daemon makhota-vm01-sd at localhost:9103 ...
+3998 Device ""Local-Device" (/bacula)" is not an autochanger.
+3906 File device ""Local-Device" (/bacula)" is always mounted.
+You have messages.
+```
+Вводим `run`,
+
+stdout
+
+```bash
+A job name must be specified.
+Automatically selected Job: System
+Run Backup job
+JobName:  System
+Level:    Full
+Client:   makhota-vm01-fd
+FileSet:  System
+Pool:     LocalPool (From Job resource)
+Storage:  makhota-vm01-sd (From Job resource)
+When:     2023-01-18 23:14:49
+Priority: 11
+OK to run? (yes/mod/no): yes
+Job queued. JobId=15
+```
+Выходим из консоли `exit`.
+
+Посмотреть логи
+
+```bash 
+sudo cat /var/log/bacula/bacula.log
+```
+
+Stdout
+
+```
+18-Jan 23:14 makhota-vm01-dir JobId 15: Start Backup JobId 15, Job=System.2023-01-18_23.14.53_03
+18-Jan 23:14 makhota-vm01-dir JobId 15: Created new Volume="Local-0015", Pool="LocalPool", MediaType="File" in catalog.
+18-Jan 23:14 makhota-vm01-dir JobId 15: Using Device "Local-Device" to write.
+18-Jan 23:14 makhota-vm01-sd JobId 15: Labeled new Volume "Local-0015" on File device "Local-Device" (/bacula).
+18-Jan 23:14 makhota-vm01-sd JobId 15: Wrote label to prelabeled Volume "Local-0015" on File device "Local-Device" (/bacula)
+18-Jan 23:14 makhota-vm01-sd JobId 15: Elapsed time=00:00:02, Transfer rate=1.034 M Bytes/second
+18-Jan 23:14 makhota-vm01-sd JobId 15: Sending spooled attrs to the Director. Despooling 307,063 bytes ...
+18-Jan 23:14 makhota-vm01-dir JobId 15: Bacula makhota-vm01-dir 9.6.7 (10Dec20):
+  Build OS:               x86_64-pc-linux-gnu debian bullseye/sid
+  JobId:                  15
+  Job:                    System.2023-01-18_23.14.53_03
+  Backup Level:           Full
+  Client:                 "makhota-vm01-fd" 9.6.7 (10Dec20) x86_64-pc-linux-gnu,debian,bullseye/sid
+  FileSet:                "System" 2023-01-18 21:43:52
+  Pool:                   "LocalPool" (From Job resource)
+  Catalog:                "MyCatalog" (From Client resource)
+  Storage:                "makhota-vm01-sd" (From Job resource)
+  Scheduled time:         18-Jan-2023 23:14:49
+  Start time:             18-Jan-2023 23:14:55
+  End time:               18-Jan-2023 23:14:57
+  Elapsed time:           2 secs
+  Priority:               11
+  FD Files Written:       1,529
+  SD Files Written:       1,529
+  FD Bytes Written:       1,879,384 (1.879 MB)
+  SD Bytes Written:       2,069,462 (2.069 MB)
+  Rate:                   939.7 KB/s
+  Software Compression:   None
+  Comm Line Compression:  51.3% 2.1:1
+  Snapshot/VSS:           no
+  Encryption:             no
+  Accurate:               no
+  Volume name(s):         Local-0015
+  Volume Session Id:      1
+  Volume Session Time:    1674072831
+  Last Volume Bytes:      2,103,938 (2.103 MB)
+  Non-fatal FD errors:    0
+  SD Errors:              0
+  FD termination status:  OK
+  SD termination status:  OK
+  Termination:            Backup OK
+
+18-Jan 23:14 makhota-vm01-dir JobId 15: Begin pruning Jobs older than 6 months .
+18-Jan 23:14 makhota-vm01-dir JobId 15: No Jobs found to prune.
+18-Jan 23:14 makhota-vm01-dir JobId 15: Begin pruning Files.
+18-Jan 23:14 makhota-vm01-dir JobId 15: No Files found to prune.
+18-Jan 23:14 makhota-vm01-dir JobId 15: End auto prune.
+
+```
 
 Использованные источники:
 
