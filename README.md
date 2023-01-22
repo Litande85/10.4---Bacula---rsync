@@ -92,7 +92,7 @@ sudo chmod -R 700 /bacula
 **Настройка Bacula Storage (сервис bacula-sd)** — хранилище, предназначенное для сохранения резервных копий на диске. 
 
 
-sudo nano /etc/bacula/[bacula-local/bacula-sd.conf](bacula-sd.conf)
+sudo nano /etc/bacula/[bacula-sd.conf](bacula-local/bacula-sd.conf)
 
 
 
@@ -145,7 +145,7 @@ sudo /usr/sbin/bacula-sd -t -c /etc/bacula/bacula-sd.conf
 
 **Настройка Bacula File Daemon (сервис bacula-fd)** — клиентская часть сервиса, которая нужна для доступа к файлам на сервере, с которого будет выполняться резервное копирование.
 
-sudo nano /etc/bacula/[bacula-local/bacula-fd.conf](bacula-fd.conf)
+sudo nano /etc/bacula/[bacula-fd.conf](bacula-local/bacula-fd.conf)
 
 ```bash
 Director {
@@ -184,7 +184,7 @@ sudo /usr/sbin/bacula-fd -t -c /etc/bacula/bacula-fd.conf
 
 **Настройка Bacula Director (сервис bacula-dir)** — основной сервис, который управляет всеми другими процессами по резервному копированию и восстановлению.
 
-sudo nano /etc/bacula/[bacula-local/bacula-dir.conf](bacula-dir.conf)
+sudo nano /etc/bacula/[bacula-dir.conf](bacula-local/bacula-dir.conf)
 
 ```bash
 Director {                            # define myself
