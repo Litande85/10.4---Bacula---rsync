@@ -444,6 +444,384 @@ Stdout
 
 ### *<a name="3"> Ответ к Заданию 3 </a>*
 
+C помощью terraform создано 3 машины:
+
+[terraform/main.tf](rsync/main.tf)
+
+### `makhota-vm10 10.128.0.10` - первый рабочий сервер, который нужно архивировать
+
+Конфигурация для `makhota-vm10 10.128.0.10`
+
+[/etc/rsyncd.conf](rsync/rsyncd.conf)
+
+```bash
+pid file = /var/run/rsyncd.pid
+log file = /var/log/rsyncd.log
+transfer logging = true
+munge symlinks = yes
+# папка источник для бэкапа
+[data]
+path = /etc/default
+uid = root
+read only = yes
+list = yes
+comment = Data backup Dir
+auth users = backup
+secrets file = /etc/rsyncd.scrt
+```
+
+[/etc/rsyncd.scrt](rsync/rsyncd.scrt)
+
+
+```bash
+backup:12345
+```
+
+При создании машины исполнен установочный скрипт
+
+[rsync/setuprsync.sh](rsync/setuprsync.sh)
+
+```bash
+#!/bin/bash
+
+# Устанавливаем rsync
+
+sudo apt install rsync
+
+# Настройка конфигурации по умолчанию, меняем значение RSYNC_ENABLE = true
+
+sudo sed -i 's/RSYNC_ENABLE=false/RSYNC_ENABLE=true/g' /etc/default/rsync
+
+# Копируем нужный файл кофигурации  /etc/rsyncd.conf
+
+sudo cp /home/user/rsync/rsyncd.conf /etc/rsyncd.conf
+
+# Копируем нужный файл c паролем пользователя backup  /etc/rsyncd.scr
+
+sudo cp /home/user/rsync/rsyncd.scrt /etc/rsyncd.scrt
+
+# Выдаем права
+
+sudo chmod 0600 /etc/rsyncd.conf
+sudo chmod 0600 /etc/rsyncd.scrt
+
+# Запускаем службу, проверяем статус
+
+sudo systemctl start rsync 
+sudo service --status-all | grep rsync
+sudo netstat -tulnp | grep rsync
+
+#Вносим данные в скрипт для архивации на другой сервер и копируем на сервер для архивирования
+
+sed -i "s/.*srv_ip=.*/srv_ip=$(hostname -I)/" /home/user/rsync/backup-vm1.sh
+sed -i "s/.*srv_name=.*/srv_name=$(hostname)/" /home/user/rsync/backup-vm1.sh
+cp /home/user/rsync/backup-vm1.sh /home/user/rsync/backup-$(hostname).sh
+sudo apt install sshpass
+sudo ssh-keyscan -t rsa 10.128.0.103 >> ~/.ssh/known_hosts
+ssh-keygen -f "/home/user/.ssh/known_hosts" -R 10.128.0.103
+sshpass -p1 scp /home/user/rsync/backup-$(hostname).sh user@10.128.0.103:/home/user/rsync/ 
+```
+
+### `makhota-vm11 10.128.0.11` - второй рабочий сервер, который нужно архивировать
+
+Конфигурация и установка - идентичны первому рабочему серверу.
+
+### `makhota-server 10.128.0.103 ` - сервер для хранения архивов
+
+
+Конфигурация для `makhota-server 10.128.0.103`
+
+[/etc/rsyncd.conf](rsync/rsyncd.conf)
+
+```bash
+pid file = /var/run/rsyncd.pid
+log file = /var/log/rsyncd.log
+transfer logging = true
+munge symlinks = yes
+# папка источник для бэкапа
+[data]
+path = /etc/default
+uid = root
+read only = yes
+list = yes
+comment = Data backup Dir
+auth users = backup
+secrets file = /etc/rsyncd.scrt
+```
+
+[/etc/rsyncd.scrt](rsync/rsyncdmain.scrt)
+
+*Без указания пользователя*
+
+```bash
+12345
+```
+
+При создании машины исполнен установочный скрипт
+
+[rsync/setuprsyncmain.sh](rsync/setuprsyncmain.sh)
+
+```bash
+#!/bin/bash
+
+# Устанавливаем rsync
+
+sudo apt install rsync
+
+
+# Настройка конфигурации по умолчанию, меняем значение RSYNC_ENABLE = true
+
+sudo sed -i 's/RSYNC_ENABLE=false/RSYNC_ENABLE=true/g' /etc/default/rsync
+
+# Копируем нужный файл кофигурации  /etc/rsyncd.conf
+
+sudo cp /home/user/rsync/rsyncd.conf /etc/rsyncd.conf
+
+# Копируем нужный файл c паролем пользователя backup  /etc/rsyncd.scr
+
+sudo cp /home/user/rsync/rsyncdmain.scrt /etc/rsyncd.scrt
+
+# Выдаем права
+sudo chmod 0600 /etc/rsyncd.conf
+sudo chmod 0600 /etc/rsyncd.scrt
+
+# Запускаем службу, проверяем статус
+
+sudo systemctl start rsync 
+sudo service --status-all | grep rsync
+sudo netstat -tulnp | grep rsync
+
+
+#Устанавливаем пароль для user
+
+yes 1 |sudo passwd user
+
+# Перекладываем скрипты в специальный каталог. 
+#Настраиваем скрипт для выполнения синхронизации: 
+sudo mkdir /root/scripts/
+sudo cp /home/user/rsync/*.sh /root/scripts/
+sudo chmod -R 0744 /root/scripts/
+
+```
+
+Скрипты для инкрементного архивирования, которые создаются на сервере для хранения архивов `makhota-server 10.128.0.103` и архивируют соответствующие папки `/etc/default` с `makhota-vm10 10.128.0.10` и `makhota-vm11 10.128.0.11`
+
+[/root/scripts/backup-makhota-vm10.sh](rsync/backup-makhota-vm10.sh)
+
+```bash
+#!/bin/bash
+date
+# Папка, куда будем складывать архивы — ее либо сразу создать либо не создавать а положить в уже существующие
+syst_dir=/backup/
+# Имя сервера, который архивируем
+srv_name=makhota-vm10
+# Адрес сервера, который архивируем
+srv_ip=10.128.0.10 
+# Пользователь rsync на сервере, который архивируем
+srv_user=backup
+# Ресурс на сервере для бэкапа
+srv_dir=data
+
+
+#Вывод в консоль информации о запуске бекапа
+
+echo "Start backup ${srv_name}"
+# Создаем папку для инкрементных бэкапов
+mkdir -p ${syst_dir}${srv_name}/increment/
+# Запускаем копирование
+
+#-a, --archive Эквивалентно набору -rlptgoD. Это быстрый способ указать, что Вам нужна рекурсия 
+# и Вы хотите сохранить почти все. -a не сохраняет жесткие ссылки, для этого отдельно указывать -H.
+
+#-v, --verbose увеличить уровень подробностей
+
+#-z, --compress С этим параметром rsync сжимает все передаваемые данные файлов.
+
+#--delete Удалять любые файлы на приемной стороне, которых нет на передающей
+
+#--password-file Позволяет Вам предоставить пароль для доступа к rsync-серверу, сохранив его в файле.
+
+#-b, --backup создавать резервную копию (см. --suffix и --backup-dir)
+# --backup-dir создавать резервную копию в этом каталоге
+
+/usr/bin/rsync -avz --progress --delete --password-file=/etc/rsyncd.scrt \
+${srv_user}@${srv_ip}::${srv_dir} ${syst_dir}${srv_name}/current/ --backup \
+--backup-dir=${syst_dir}${srv_name}/increment/`date +%Y-%m-%d`/
+
+#Найти и удалить файлы старше 30 дней
+
+# -type — тип искомого: f=файл, d=каталог, l=ссылка (link).
+# -mtime — время последнего изменения файла.
+# -exec command {} \; — выполняет над найденным файлом указанную команду; обратите внимание на синтаксис.
+
+# -maxdepth 1 ограничить глубину поиска значением «1». 
+#Так вы ограничитесь поиском в текущей папке, не залезая в подпапки.
+
+
+/usr/bin/find ${syst_dir}${srv_name}/increment/ -maxdepth 1 -type d -mtime +30 -exec rm -rf {} \;
+
+#Вывести дату в консоль
+
+date
+
+#Вывести в консоль информацию о завершении бекапа на конкретной машине
+echo "Finish backup ${srv_name} ip ${srv_ip}"
+
+```
+
+Для второй машины то же самое, отличаются только 
+
+```bash
+# Имя сервера, который архивируем
+srv_name=makhota-vm11
+# Адрес сервера, который архивируем
+srv_ip=10.128.0.11 
+```
+
+[/root/scripts/backup-makhota-vm11.sh](rsync/backup-makhota-vm11.sh)
+
+
+Тестируем архивирование:
+
+```bash
+user@makhota-server:~$ sudo /root/scripts/backup-makhota-vm10.sh
+Mon 23 Jan 2023 12:28:30 AM MSK
+Start backup makhota-vm10
+receiving incremental file list
+created directory /backup/makhota-vm10/current
+./
+acpid
+            346 100%  337.89kB/s    0:00:00 (xfr#1, to-chk=16/18)
+console-setup
+            285 100%  278.32kB/s    0:00:00 (xfr#2, to-chk=15/18)
+cron
+            955 100%  932.62kB/s    0:00:00 (xfr#3, to-chk=14/18)
+dbus
+            297 100%  290.04kB/s    0:00:00 (xfr#4, to-chk=13/18)
+grub
+          1,225 100%    1.17MB/s    0:00:00 (xfr#5, to-chk=12/18)
+grub.ucf-dist
+          1,225 100%    1.17MB/s    0:00:00 (xfr#6, to-chk=11/18)
+hwclock
+             81 100%   79.10kB/s    0:00:00 (xfr#7, to-chk=10/18)
+keyboard
+            150 100%  146.48kB/s    0:00:00 (xfr#8, to-chk=9/18)
+locale
+             54 100%   52.73kB/s    0:00:00 (xfr#9, to-chk=8/18)
+networking
+          1,032 100% 1007.81kB/s    0:00:00 (xfr#10, to-chk=7/18)
+nss
+          1,756 100%    1.67MB/s    0:00:00 (xfr#11, to-chk=6/18)
+ntp
+             15 100%   14.65kB/s    0:00:00 (xfr#12, to-chk=5/18)
+rsync
+          2,061 100%    1.97MB/s    0:00:00 (xfr#13, to-chk=4/18)
+ssh
+            133 100%   64.94kB/s    0:00:00 (xfr#14, to-chk=3/18)
+useradd
+          1,118 100%  545.90kB/s    0:00:00 (xfr#15, to-chk=2/18)
+grub.d/
+grub.d/init-select.cfg
+            274 100%  133.79kB/s    0:00:00 (xfr#16, to-chk=0/18)
+
+sent 343 bytes  received 6,223 bytes  13,132.00 bytes/sec
+total size is 11,007  speedup is 1.68
+Mon 23 Jan 2023 12:28:30 AM MSK
+Finish backup makhota-vm10 ip 10.128.0.10
+user@makhota-server:~$ ls /backup/makhota-vm10/
+current  increment
+user@makhota-server:~$ ls /backup/makhota-vm10/current/
+acpid          cron  grub    grub.ucf-dist  keyboard  networking  ntp    ssh
+console-setup  dbus  grub.d  hwclock        locale    nss         rsync  useradd
+user@makhota-server:~$ ls /backup/makhota-vm10/increment/
+```
+
+```bash
+user@makhota-vm10:~$ sudo nano /etc/default/test1
+```
+
+```bash
+user@makhota-server:~$ sudo /root/scripts/backup-makhota-vm10.sh
+Mon 23 Jan 2023 12:30:49 AM MSK
+Start backup makhota-vm10
+receiving incremental file list
+./
+test1
+              6 100%    5.86kB/s    0:00:00 (xfr#1, to-chk=3/19)
+
+sent 53 bytes  received 445 bytes  996.00 bytes/sec
+total size is 11,013  speedup is 22.11
+Mon 23 Jan 2023 12:30:49 AM MSK
+Finish backup makhota-vm10 ip 10.128.0.10
+user@makhota-server:~$ ls /backup/makhota-vm10/current/
+acpid          cron  grub    grub.ucf-dist  keyboard  networking  ntp    ssh    useradd
+console-setup  dbus  grub.d  hwclock        locale    nss         rsync  test1
+user@makhota-server:~$ ls /backup/makhota-vm10/increment/
+2023-01-23
+user@makhota-server:~$ ls /backup/makhota-vm10/increment/2023-01-23/
+test1
+user@makhota-server:~$ cat /backup/makhota-vm10/increment/2023-01-23/test1 
+123
+user@makhota-server:~$ sudo /root/scripts/backup-makhota-vm11.sh
+Mon 23 Jan 2023 12:35:22 AM MSK
+Start backup makhota-vm11
+receiving incremental file list
+created directory /backup/makhota-vm11/current
+./
+acpid
+            346 100%  337.89kB/s    0:00:00 (xfr#1, to-chk=16/18)
+console-setup
+            285 100%  278.32kB/s    0:00:00 (xfr#2, to-chk=15/18)
+cron
+            955 100%  932.62kB/s    0:00:00 (xfr#3, to-chk=14/18)
+dbus
+            297 100%  290.04kB/s    0:00:00 (xfr#4, to-chk=13/18)
+grub
+          1,225 100%    1.17MB/s    0:00:00 (xfr#5, to-chk=12/18)
+grub.ucf-dist
+          1,225 100%    1.17MB/s    0:00:00 (xfr#6, to-chk=11/18)
+hwclock
+             81 100%   79.10kB/s    0:00:00 (xfr#7, to-chk=10/18)
+keyboard
+            150 100%  146.48kB/s    0:00:00 (xfr#8, to-chk=9/18)
+locale
+             54 100%   52.73kB/s    0:00:00 (xfr#9, to-chk=8/18)
+networking
+          1,032 100% 1007.81kB/s    0:00:00 (xfr#10, to-chk=7/18)
+nss
+          1,756 100%    1.67MB/s    0:00:00 (xfr#11, to-chk=6/18)
+ntp
+             15 100%   14.65kB/s    0:00:00 (xfr#12, to-chk=5/18)
+rsync
+          2,061 100% 1006.35kB/s    0:00:00 (xfr#13, to-chk=4/18)
+ssh
+            133 100%   64.94kB/s    0:00:00 (xfr#14, to-chk=3/18)
+useradd
+          1,118 100%  545.90kB/s    0:00:00 (xfr#15, to-chk=2/18)
+grub.d/
+grub.d/init-select.cfg
+            274 100%  133.79kB/s    0:00:00 (xfr#16, to-chk=0/18)
+
+sent 343 bytes  received 6,221 bytes  13,128.00 bytes/sec
+total size is 11,007  speedup is 1.68
+Mon 23 Jan 2023 12:35:22 AM MSK
+Finish backup makhota-vm11 ip 10.128.0.11
+user@makhota-server:~$ ls /backup/
+makhota-vm10  makhota-vm11
+user@makhota-server:~$ ls /backup/makhota-vm11/
+current  increment
+user@makhota-server:~$ ls /backup/makhota-vm11/current/
+acpid          cron  grub    grub.ucf-dist  keyboard  networking  ntp    ssh
+console-setup  dbus  grub.d  hwclock        locale    nss         rsync  useradd
+```
+
+Использованные источники:
+
+\- [Презентация "Отказоустойчивость: Резервное копирование. Bacula", Александр Зубарев](https://u.netology.ru/backend/uploads/lms/attachments/files/data/27925/SRLB-9__%D0%A0%D0%B5%D0%B7%D0%B5%D1%80%D0%B2%D0%BD%D0%BE%D0%B5_%D0%BA%D0%BE%D0%BF%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5._Bacula.pdf)
+
+\- http://www.opennet.ru/man.shtml?category=1&russian=0&topic=rsync
+
+
 
 ---
 
@@ -459,6 +837,16 @@ Stdout
 *Пришлите рабочую конфигурацию выбранного сервиса по поставленной задаче.*
 
 ### *<a name="4"> Ответ к Заданию 4* </a>*
+
+
+Первый метод - инкрементный с помощью rsync - см * [Ответ к Заданию 3](#3)
+
+Конфигурация: [rsync/rsyncd.conf](rsync/rsyncd.conf)
+
+Второй метод - полное резервное копирование с помощью bacula
+
+Конфигурация: 
+
 
 
 Использованные источники:
