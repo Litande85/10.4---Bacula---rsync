@@ -739,6 +739,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 #
 20 00 * * * root /root/scripts/backup-makhota-vm11.sh 2>&1 >> /home/user/rsync/logrsync-makhota-vm11.txt
 20 00 * * * root /root/scripts/backup-makhota-vm10.sh 2>&1 >> /home/user/rsync/logrsync-makhota-vm10.txt
+user@makhota-server:~$ sudo cat /var/log/syslog | grep backup
+Jan 25 00:20:01 makhota-server CRON[581]: (root) CMD (/root/scripts/backup-makhota-vm11.sh 2>&1 >> /home/user/rsync/logrsync-makhota-vm11.txt)
+Jan 25 00:20:01 makhota-server CRON[582]: (root) CMD (/root/scripts/backup-makhota-vm10.sh 2>&1 >> /home/user/rsync/logrsync-makhota-vm10.txt)
 user@makhota-server:~$ cat /home/user/rsync/logrsync-makhota-vm10.txt 
 ***
 Wed 25 Jan 2023 12:20:01 AM MSK
