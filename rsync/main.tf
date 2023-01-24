@@ -75,7 +75,7 @@ resource "yandex_compute_instance" "vm" {
     timeout     = "1m"
   }
 
-  # Change name and install Node Exporter on bash script and execute from user.
+  # Change name and permissions on bash script and execute from user.
 
   provisioner "remote-exec" {
     

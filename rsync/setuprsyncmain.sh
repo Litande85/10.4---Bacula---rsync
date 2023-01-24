@@ -4,6 +4,9 @@
 
 sudo apt install rsync
 
+#Устанавливаем пароль для user
+
+yes 1 |sudo passwd user
 
 # Настройка конфигурации по умолчанию, меняем значение RSYNC_ENABLE = true
 
@@ -27,13 +30,17 @@ sudo systemctl start rsync
 sudo service --status-all | grep rsync
 sudo netstat -tulnp | grep rsync
 
-
-#Устанавливаем пароль для user
-
-yes 1 |sudo passwd user
+# Устанавливаем sshpass
+sudo apt update
+sudo apt install sshpass
 
 # Перекладываем скрипты в специальный каталог. 
 #Настраиваем скрипт для выполнения синхронизации: 
 sudo mkdir /root/scripts/
-sudo cp /home/user/rsync/*.sh /root/scripts/
+sudo cp /home/user/*.sh /root/scripts/
 sudo chmod -R 0744 /root/scripts/
+
+#Перезапускаем шедулер с учетом дозаписи в него строк для архивирования удаленных хостов
+sudo systemctl restart cron
+#Перезапускаем хост для обновления системного времени
+sudo shutdown -r +2

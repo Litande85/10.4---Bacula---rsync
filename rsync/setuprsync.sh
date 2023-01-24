@@ -34,5 +34,10 @@ sed -i "s/.*srv_name=.*/srv_name=$(hostname)/" /home/user/rsync/backup-vm1.sh
 cp /home/user/rsync/backup-vm1.sh /home/user/rsync/backup-$(hostname).sh
 sudo apt install sshpass
 sudo ssh-keyscan -t rsa 10.128.0.103 >> ~/.ssh/known_hosts
-ssh-keygen -f "/home/user/.ssh/known_hosts" -R 10.128.0.103
-sshpass -p1 scp /home/user/rsync/backup-$(hostname).sh user@10.128.0.103:/home/user/rsync/ 
+sshpass -p1 scp /home/user/rsync/backup-$(hostname).sh user@10.128.0.103:/home/user/
+sshpass -p1 scp /home/user/rsync/backup-$(hostname).sh user@10.128.0.103:/home/user/
+
+# Добавление ежедневного резервного копирования в 23:50 в шедулер удаленного сервера для резервного копирования
+
+echo "20 00 * * * root /root/scripts/backup-$(hostname).sh 2>&1 >> /home/user/rsync/logrsync-$(hostname).txt" | sshpass -p1 ssh  user@10.128.0.103 -T "sudo tee -a /etc/crontab"
+

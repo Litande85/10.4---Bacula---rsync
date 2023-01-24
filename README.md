@@ -511,15 +511,21 @@ sudo systemctl start rsync
 sudo service --status-all | grep rsync
 sudo netstat -tulnp | grep rsync
 
-#Вносим данные в скрипт для архивации на другой сервер и копируем на сервер для архивирования
+#Вносим данные в скрипт для архивации на другой сервер
 
 sed -i "s/.*srv_ip=.*/srv_ip=$(hostname -I)/" /home/user/rsync/backup-vm1.sh
 sed -i "s/.*srv_name=.*/srv_name=$(hostname)/" /home/user/rsync/backup-vm1.sh
 cp /home/user/rsync/backup-vm1.sh /home/user/rsync/backup-$(hostname).sh
 sudo apt install sshpass
 sudo ssh-keyscan -t rsa 10.128.0.103 >> ~/.ssh/known_hosts
-ssh-keygen -f "/home/user/.ssh/known_hosts" -R 10.128.0.103
-sshpass -p1 scp /home/user/rsync/backup-$(hostname).sh user@10.128.0.103:/home/user/rsync/ 
+sshpass -p1 scp /home/user/rsync/backup-$(hostname).sh user@10.128.0.103:/home/user/
+sshpass -p1 scp /home/user/rsync/backup-$(hostname).sh user@10.128.0.103:/home/user/
+
+# Добавление ежедневного резервного копирования в 23:50 в шедулер удаленного сервера для резервного копирования
+
+echo "20 00 * * * root /root/scripts/backup-$(hostname).sh 2>&1 >> /home/user/rsync/logrsync-$(hostname).txt" | sshpass -p1 ssh  user@10.128.0.103 -T "sudo tee -a /etc/crontab"
+
+
 ```
 
 ### `makhota-vm11 10.128.0.11` - второй рабочий сервер, который нужно архивировать
@@ -568,6 +574,9 @@ secrets file = /etc/rsyncd.scrt
 
 sudo apt install rsync
 
+#Устанавливаем пароль для user
+
+yes 1 |sudo passwd user
 
 # Настройка конфигурации по умолчанию, меняем значение RSYNC_ENABLE = true
 
@@ -591,16 +600,20 @@ sudo systemctl start rsync
 sudo service --status-all | grep rsync
 sudo netstat -tulnp | grep rsync
 
-
-#Устанавливаем пароль для user
-
-yes 1 |sudo passwd user
+# Устанавливаем sshpass
+sudo apt update
+sudo apt install sshpass
 
 # Перекладываем скрипты в специальный каталог. 
 #Настраиваем скрипт для выполнения синхронизации: 
 sudo mkdir /root/scripts/
-sudo cp /home/user/rsync/*.sh /root/scripts/
+sudo cp /home/user/*.sh /root/scripts/
 sudo chmod -R 0744 /root/scripts/
+
+#Перезапускаем шедулер с учетом дозаписи в него строк для архивирования удаленных хостов
+sudo systemctl restart cron
+#Перезапускаем хост для обновления системного времени
+sudo shutdown -r +2
 
 ```
 
@@ -610,6 +623,8 @@ sudo chmod -R 0744 /root/scripts/
 
 ```bash
 #!/bin/bash
+echo "***"
+
 date
 # Папка, куда будем складывать архивы — ее либо сразу создать либо не создавать а положить в уже существующие
 syst_dir=/backup/
@@ -666,6 +681,8 @@ date
 
 #Вывести в консоль информацию о завершении бекапа на конкретной машине
 echo "Finish backup ${srv_name} ip ${srv_ip}"
+echo "***"
+
 
 ```
 
@@ -681,11 +698,50 @@ srv_ip=10.128.0.11
 [/root/scripts/backup-makhota-vm11.sh](rsync/backup-makhota-vm11.sh)
 
 
-Тестируем архивирование:
+### Проверяем работу скриптов по архивированию с помощью rsinc, запушенных шедулером:
 
 ```bash
-user@makhota-server:~$ sudo /root/scripts/backup-makhota-vm10.sh
-Mon 23 Jan 2023 12:28:30 AM MSK
+user@makhota-server:~$ date
+Wed 25 Jan 2023 12:19:20 AM MSK
+user@makhota-server:~$ ls
+backup-makhota-vm10.sh  backup-makhota-vm11.sh  rsync
+user@makhota-server:~$ ls /
+bin   dev  home        initrd.img.old  lib32  libx32      media  opt   root  sbin  sys  usr  vmlinuz
+boot  etc  initrd.img  lib             lib64  lost+found  mnt    proc  run   srv   tmp  var  vmlinuz.old
+user@makhota-server:~$ date
+Wed 25 Jan 2023 12:20:15 AM MSK
+user@makhota-server:~$ ls /
+backup  dev   initrd.img      lib32   lost+found  opt   run   sys  var
+bin     etc   initrd.img.old  lib64   media       proc  sbin  tmp  vmlinuz
+boot    home  lib             libx32  mnt         root  srv   usr  vmlinuz.old
+user@makhota-server:~$ cat /etc/crontab 
+# /etc/crontab: system-wide crontab
+# Unlike any other crontab you don't have to run the `crontab'
+# command to install the new version when you edit this file
+# and files in /etc/cron.d. These files also have username fields,
+# that none of the other crontabs do.
+
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Example of job definition:
+# .---------------- minute (0 - 59)
+# |  .------------- hour (0 - 23)
+# |  |  .---------- day of month (1 - 31)
+# |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...
+# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat
+# |  |  |  |  |
+# *  *  *  *  * user-name command to be executed
+17 *    * * *   root    cd / && run-parts --report /etc/cron.hourly
+25 6    * * *   root    test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.daily )
+47 6    * * 7   root    test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.weekly )
+52 6    1 * *   root    test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.monthly )
+#
+20 00 * * * root /root/scripts/backup-makhota-vm11.sh 2>&1 >> /home/user/rsync/logrsync-makhota-vm11.txt
+20 00 * * * root /root/scripts/backup-makhota-vm10.sh 2>&1 >> /home/user/rsync/logrsync-makhota-vm10.txt
+user@makhota-server:~$ cat /home/user/rsync/logrsync-makhota-vm10.txt 
+***
+Wed 25 Jan 2023 12:20:01 AM MSK
 Start backup makhota-vm10
 receiving incremental file list
 created directory /backup/makhota-vm10/current
@@ -717,23 +773,32 @@ ntp
 rsync
           2,061 100%    1.97MB/s    0:00:00 (xfr#13, to-chk=4/18)
 ssh
-            133 100%   64.94kB/s    0:00:00 (xfr#14, to-chk=3/18)
+            133 100%  129.88kB/s    0:00:00 (xfr#14, to-chk=3/18)
 useradd
-          1,118 100%  545.90kB/s    0:00:00 (xfr#15, to-chk=2/18)
+          1,118 100%    1.07MB/s    0:00:00 (xfr#15, to-chk=2/18)
 grub.d/
 grub.d/init-select.cfg
-            274 100%  133.79kB/s    0:00:00 (xfr#16, to-chk=0/18)
+            274 100%  267.58kB/s    0:00:00 (xfr#16, to-chk=0/18)
 
 sent 343 bytes  received 6,223 bytes  13,132.00 bytes/sec
 total size is 11,007  speedup is 1.68
-Mon 23 Jan 2023 12:28:30 AM MSK
+Wed 25 Jan 2023 12:20:01 AM MSK
 Finish backup makhota-vm10 ip 10.128.0.10
+***
+user@makhota-server:~$ ls -la /backup/
+total 16
+drwxr-xr-x  4 root root 4096 Jan 25 00:20 .
+drwxr-xr-x 19 root root 4096 Jan 25 00:20 ..
+drwxr-xr-x  4 root root 4096 Jan 25 00:20 makhota-vm10
+drwxr-xr-x  4 root root 4096 Jan 25 00:20 makhota-vm11
 user@makhota-server:~$ ls /backup/makhota-vm10/
 current  increment
 user@makhota-server:~$ ls /backup/makhota-vm10/current/
-acpid          cron  grub    grub.ucf-dist  keyboard  networking  ntp    ssh
-console-setup  dbus  grub.d  hwclock        locale    nss         rsync  useradd
+acpid          cron  grub    grub.ucf-dist  keyboard  networking  ntp    ssh    useradd
+console-setup  dbus  grub.d  hwclock        locale    nss         rsync  test1
 user@makhota-server:~$ ls /backup/makhota-vm10/increment/
+user@makhota-server:~$
+
 ```
 
 ```bash
@@ -741,78 +806,27 @@ user@makhota-vm10:~$ sudo nano /etc/default/test1
 ```
 
 ```bash
-user@makhota-server:~$ sudo /root/scripts/backup-makhota-vm10.sh
-Mon 23 Jan 2023 12:30:49 AM MSK
+user@makhota-server:~$ sudo /root/scripts/backup-makhota-vm10.sh 
+***
+Wed 25 Jan 2023 12:25:13 AM MSK
 Start backup makhota-vm10
 receiving incremental file list
 ./
 test1
-              6 100%    5.86kB/s    0:00:00 (xfr#1, to-chk=3/19)
+              7 100%    6.84kB/s    0:00:00 (xfr#1, to-chk=3/19)
 
-sent 53 bytes  received 445 bytes  996.00 bytes/sec
-total size is 11,013  speedup is 22.11
-Mon 23 Jan 2023 12:30:49 AM MSK
+sent 53 bytes  received 446 bytes  998.00 bytes/sec
+total size is 11,014  speedup is 22.07
+Wed 25 Jan 2023 12:25:13 AM MSK
 Finish backup makhota-vm10 ip 10.128.0.10
-user@makhota-server:~$ ls /backup/makhota-vm10/current/
-acpid          cron  grub    grub.ucf-dist  keyboard  networking  ntp    ssh    useradd
-console-setup  dbus  grub.d  hwclock        locale    nss         rsync  test1
+***
 user@makhota-server:~$ ls /backup/makhota-vm10/increment/
-2023-01-23
-user@makhota-server:~$ ls /backup/makhota-vm10/increment/2023-01-23/
+2023-01-25
+user@makhota-server:~$ ls /backup/makhota-vm10/increment/2023-01-25/
 test1
-user@makhota-server:~$ cat /backup/makhota-vm10/increment/2023-01-23/test1 
+user@makhota-server:~$ cat /backup/makhota-vm10/increment/2023-01-25/test1 
 123
-user@makhota-server:~$ sudo /root/scripts/backup-makhota-vm11.sh
-Mon 23 Jan 2023 12:35:22 AM MSK
-Start backup makhota-vm11
-receiving incremental file list
-created directory /backup/makhota-vm11/current
-./
-acpid
-            346 100%  337.89kB/s    0:00:00 (xfr#1, to-chk=16/18)
-console-setup
-            285 100%  278.32kB/s    0:00:00 (xfr#2, to-chk=15/18)
-cron
-            955 100%  932.62kB/s    0:00:00 (xfr#3, to-chk=14/18)
-dbus
-            297 100%  290.04kB/s    0:00:00 (xfr#4, to-chk=13/18)
-grub
-          1,225 100%    1.17MB/s    0:00:00 (xfr#5, to-chk=12/18)
-grub.ucf-dist
-          1,225 100%    1.17MB/s    0:00:00 (xfr#6, to-chk=11/18)
-hwclock
-             81 100%   79.10kB/s    0:00:00 (xfr#7, to-chk=10/18)
-keyboard
-            150 100%  146.48kB/s    0:00:00 (xfr#8, to-chk=9/18)
-locale
-             54 100%   52.73kB/s    0:00:00 (xfr#9, to-chk=8/18)
-networking
-          1,032 100% 1007.81kB/s    0:00:00 (xfr#10, to-chk=7/18)
-nss
-          1,756 100%    1.67MB/s    0:00:00 (xfr#11, to-chk=6/18)
-ntp
-             15 100%   14.65kB/s    0:00:00 (xfr#12, to-chk=5/18)
-rsync
-          2,061 100% 1006.35kB/s    0:00:00 (xfr#13, to-chk=4/18)
-ssh
-            133 100%   64.94kB/s    0:00:00 (xfr#14, to-chk=3/18)
-useradd
-          1,118 100%  545.90kB/s    0:00:00 (xfr#15, to-chk=2/18)
-grub.d/
-grub.d/init-select.cfg
-            274 100%  133.79kB/s    0:00:00 (xfr#16, to-chk=0/18)
 
-sent 343 bytes  received 6,221 bytes  13,128.00 bytes/sec
-total size is 11,007  speedup is 1.68
-Mon 23 Jan 2023 12:35:22 AM MSK
-Finish backup makhota-vm11 ip 10.128.0.11
-user@makhota-server:~$ ls /backup/
-makhota-vm10  makhota-vm11
-user@makhota-server:~$ ls /backup/makhota-vm11/
-current  increment
-user@makhota-server:~$ ls /backup/makhota-vm11/current/
-acpid          cron  grub    grub.ucf-dist  keyboard  networking  ntp    ssh
-console-setup  dbus  grub.d  hwclock        locale    nss         rsync  useradd
 ```
 
 Использованные источники:
