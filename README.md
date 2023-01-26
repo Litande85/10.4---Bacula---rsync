@@ -46,9 +46,9 @@
 
 ### *<a name="2"> Ответ к Заданию 2 </a>*
 
-Структура BAcula
+Структура Bacula
 
-![Diagram](img/Conf-Diagram.png)
+![objects](img/bacula-objects.png)
 
 \* https://www.bacula.org/13.0.x-manuals/en/main/Customizing_Configuration_F.html
 
