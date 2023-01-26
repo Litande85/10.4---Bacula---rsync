@@ -521,7 +521,7 @@ sudo ssh-keyscan -t rsa 10.128.0.103 >> ~/.ssh/known_hosts
 sshpass -p1 scp /home/user/rsync/backup-$(hostname).sh user@10.128.0.103:/home/user/
 sshpass -p1 scp /home/user/rsync/backup-$(hostname).sh user@10.128.0.103:/home/user/
 
-# Добавление ежедневного резервного копирования в 23:50 в шедулер удаленного сервера для резервного копирования
+# Добавление ежедневного резервного копирования в 00:20 в шедулер удаленного сервера для резервного копирования
 
 echo "20 00 * * * root /root/scripts/backup-$(hostname).sh 2>&1 >> /home/user/rsync/logrsync-$(hostname).txt" | sshpass -p1 ssh  user@10.128.0.103 -T "sudo tee -a /etc/crontab"
 
