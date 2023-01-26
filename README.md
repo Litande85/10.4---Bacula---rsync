@@ -46,6 +46,12 @@
 
 ### *<a name="2"> Ответ к Заданию 2 </a>*
 
+Структура BAcula
+
+![Diagram](img/Conf-Diagram.png)
+
+\* https://www.bacula.org/13.0.x-manuals/en/main/Customizing_Configuration_F.html
+
 Установка Bacula 
 
 ```bash
@@ -323,7 +329,7 @@ sudo /usr/sbin/bacula-dir -t -c /etc/bacula/bacula-dir.conf
 Связи паролей и имен:
 
 ![pass](img/Conf-Diagram.png)
-
+\* https://www.bacula.org/13.0.x-manuals/en/main/Customizing_Configuration_F.html 
 
 Перезапускаем службы
 
