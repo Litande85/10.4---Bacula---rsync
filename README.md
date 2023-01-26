@@ -322,7 +322,7 @@ sudo /usr/sbin/bacula-dir -t -c /etc/bacula/bacula-dir.conf
 
 Связи паролей и имен:
 
-![pass](img/pass%202023-01-18%20205756.png)
+![pass](img/Conf-Diagram.png)
 
 
 Перезапускаем службы
