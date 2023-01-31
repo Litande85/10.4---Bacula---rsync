@@ -452,7 +452,7 @@ Stdout
 
 C помощью terraform создано 3 машины:
 
-[terraform/main.tf](rsync/main.tf)
+[rsync/main.tf](rsync/main.tf)
 
 ### `makhota-vm10 10.128.0.10` - первый рабочий сервер, который нужно архивировать
 
@@ -871,7 +871,7 @@ user@makhota-server:~$ cat /backup/makhota-vm10/increment/2023-01-25/test1
 
 **Второй метод** - полное резервное копирование с помощью bacula
 
-Конфигурация: 
+Конфигурация: [bacula-remote/](bacula-remote/)
 
 
 
