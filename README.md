@@ -875,6 +875,11 @@ user@makhota-server:~$ cat /backup/makhota-vm10/increment/2023-01-25/test1
 
 
 
+Создаем 2 рабочие машины с предустановленным bacula-fd `makhota-vm10` и `makhota-vm11` на них и сервер для архивирования `makhota-server`.
+
+Устанавливаем bacula на `makhota-server` с помощью скрипта ...
+
+
 Использованные источники:
 
 \- https://www.bacula.org/13.0.x-manuals/en/main/Brief_Tutorial.html
