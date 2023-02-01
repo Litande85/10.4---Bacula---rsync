@@ -877,16 +877,145 @@ user@makhota-server:~$ cat /backup/makhota-vm10/increment/2023-01-25/test1
 
 Создаем 2 рабочие машины с предустановленным bacula-fd `makhota-vm10` и `makhota-vm11` на них и сервер для архивирования `makhota-server`.
 
-Устанавливаем bacula на `makhota-server` с помощью скрипта ...
+bacula-fd `makhota-vm10` и `makhota-vm11` предустановлен c использованием шаблона конфигурации [bacula-remote/bacula-fd.conf](bacula-remote/bacula-fd.conf) скриптом:
 
+[bacula-remote/setupclient.sh](bacula-remote/setupclient.sh)
+
+```bash
+#!/bin/bash
+
+# Устанавливаем bacula-client
+sudo apt update -y
+sudo apt install bacula-client -y
+
+
+#Вносим данные в bacula-fd.conf
+
+sed -i "s/Name = makhota-server-fd/Name = $(hostname)-fd/" /home/user/bacula-remote/bacula-fd.conf
+sed -i "s/FDAddress = 10.128.0.103/FDAddress = $(hostname -I)/" /home/user/bacula-remote/bacula-fd.conf
+
+
+# Копируем нужный файл кофигурации  /etc/bacula/bacula-fd.conf
+
+sudo cp /home/user/bacula-remote/bacula-fd.conf /etc/bacula/bacula-fd.conf
+
+
+# Выдаем права
+
+sudo chmod 0600 /etc/bacula/bacula-fd.conf
+
+
+# Запускаем службу, проверяем статус
+
+sudo systemctl start bacula-fd 
+# sudo service bacula-fd status -d
+sudo netstat -tulnp | grep bacula
+
+# После редактирования настроек выполняем проверку получившийся конфигурации:
+
+sudo /usr/sbin/bacula-fd -t -c /etc/bacula/bacula-fd.conf
+
+# Добавляем права для bacula
+
+sudo chown -R bacula:bacula /etc/bacula/bacula-fd.conf 
+sudo chmod -R 700 /etc/bacula/bacula-fd.conf
+sudo systemctl restart bacula-fd
+
+# Добавляем jobы по резервированию и копированию с клиента на удаленный сервер для архивации
+sed -i "s/clientname/$(hostname)/g" /home/user/bacula-remote/jobs.conf
+sed -i "s/Address = ip/Address = $(hostname -I)/" /home/user/bacula-remote/jobs.conf
+
+
+sudo apt install sshpass -y
+sudo ssh-keyscan -t rsa 10.128.0.103 >> ~/.ssh/known_hosts
+
+# Добавляем информацию о сервере в /etc/hosts
+sudo sed -i '$a10.128.0.103 makhota-server' /etc/hosts
+
+
+cat /home/user/bacula-remote/jobs.conf  | sshpass -p1 ssh  user@10.128.0.103 -T "sudo tee -a /home/user/bacula-remote/bacula-dir.conf"
+# cat /home/user/bacula-remote/jobs.conf  | sshpass -p1 ssh  user@10.128.0.103 -T "sudo tee -a /etc/bacula/bacula-dir.conf"
+
+
+```
+
+Устанавливаем bacula на `makhota-server` с помощью скрипта [bacula-remote/setupserver.sh](bacula-remote/setupserver.sh), скрипт запускаем не в процессе создания терраформ, а после, так как требуются подтверждения и пароль для базы данных:
+
+```bash
+#!/bin/bash
+sudo apt update -y
+sudo apt install bacula postgresql -y 
+
+# Проверяем статус служб
+
+sudo service --status-all | grep bacula
+
+#Cоздадим новые каталоги для хранения резервных копий
+
+sudo mkdir -p /bacula
+
+#Нужно изменить права доступа к файлам, чтобы только процесс bacula (и суперпользователь) мог получить доступ к созданным каталогам:
+
+sudo chown -R bacula:bacula /bacula 
+sudo chmod -R 700 /bacula
+
+# Копируем нужный файл кофигурации  /etc/bacula/bacula-sd.conf
+
+sudo cp /home/user/bacula-remote/bacula-sd.conf /etc/bacula/bacula-sd.conf
+
+# Копируем нужный файл кофигурации  /etc/bacula/bacula-dir.conf
+
+sudo cp /home/user/bacula-remote/bacula-dir.conf /etc/bacula/bacula-dir.conf
+
+# Копируем нужный файл кофигурации  /etc/bacula/bconsole.conf
+
+sudo cp /home/user/bacula-remote/bconsole.conf /etc/bacula/bconsole.conf
+
+# Выдаем права
+sudo chown -R bacula:bacula /etc/bacula/bacula-sd.conf 
+sudo chmod 0660 /etc/bacula/bacula-sd.conf
+sudo chown -R bacula:bacula /etc/bacula/bacula-dir.conf 
+sudo chmod 0660 /etc/bacula/bacula-dir.conf
+sudo chown -R bacula:bacula /etc/bacula/bconsole.conf 
+sudo chmod 0660 /etc/bacula/bconsole.conf
+
+# После редактирования настроек выполняем проверку получившийся конфигурации:
+
+sudo /usr/sbin/bacula-sd -t -c /etc/bacula/bacula-sd.conf
+sudo /usr/sbin/bacula-dir -t -c /etc/bacula/bacula-dir.conf
+
+
+# Перезапускаем службы
+
+sudo systemctl restart bacula-sd
+sudo systemctl restart bacula-fd
+sudo systemctl restart bacula-dir
+
+# Проверяем статус служб
+
+sudo service --status-all | grep bacula
+```
+[1](bacula-remote/img1)
+
+[2](bacula-remote/img2)
+
+[3](bacula-remote/img3)
+
+[4](bacula-remote/img4)
+
+Тестируем через `bconsole`
+
+Stdout
+
+```bash
+
+
+```
 
 Использованные источники:
 
-\- [bacula-web.org](https://docs.bacula-web.org/en/latest/02_install/overview.html)
 
 \- https://www.bacula.org/13.0.x-manuals/en/main/Brief_Tutorial.html
 
 \- [itsecforu.ru/2018/02/27/bacula-резервное-копирование-с-открытым-исходным кодом](https://itsecforu.ru/2018/02/27/bacula-%d1%80%d0%b5%d0%b7%d0%b5%d1%80%d0%b2%d0%bd%d0%be%d0%b5-%d0%ba%d0%be%d0%bf%d0%b8%d1%80%d0%be%d0%b2%d0%b0%d0%bd%d0%b8%d0%b5-%d1%81-%d0%be%d1%82%d0%ba%d1%80%d1%8b%d1%82%d1%8b%d0%bc-%d0%b8%d1%81/)
-
-\- https://antiskleroz.pp.ua/it/bacula
 
