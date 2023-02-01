@@ -20,6 +20,14 @@ sudo cp /home/user/bacula-remote/bacula-fd.conf /etc/bacula/bacula-fd.conf
 
 sudo chmod 0600 /etc/bacula/bacula-fd.conf
 
+#Cоздадим новые каталоги для хранения резервных копий
+
+sudo mkdir -p /tmp/bacula-restores/$(hostname)
+
+#Нужно изменить права доступа к файлам, чтобы только процесс bacula (и суперпользователь) мог получить доступ к созданным каталогам:
+
+sudo chown -R bacula:bacula /tmp/bacula-restores/$(hostname)
+sudo chmod -R 700 /tmp/bacula-restores/$(hostname)
 
 # Запускаем службу, проверяем статус
 

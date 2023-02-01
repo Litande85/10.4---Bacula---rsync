@@ -904,6 +904,14 @@ sudo cp /home/user/bacula-remote/bacula-fd.conf /etc/bacula/bacula-fd.conf
 
 sudo chmod 0600 /etc/bacula/bacula-fd.conf
 
+#Cоздадим  каталог для хранения резервных копий
+
+sudo mkdir -p /tmp/bacula-restores/$(hostname)
+
+#Нужно изменить права доступа к файлам, чтобы только процесс bacula (и суперпользователь) мог получить доступ к созданным каталогам:
+
+sudo chown -R bacula:bacula /tmp/bacula-restores/$(hostname)
+sudo chmod -R 700 /tmp/bacula-restores/$(hostname)
 
 # Запускаем службу, проверяем статус
 
@@ -937,9 +945,10 @@ cat /home/user/bacula-remote/jobs.conf  | sshpass -p1 ssh  user@10.128.0.103 -T 
 # cat /home/user/bacula-remote/jobs.conf  | sshpass -p1 ssh  user@10.128.0.103 -T "sudo tee -a /etc/bacula/bacula-dir.conf"
 
 
+
 ```
 
-Устанавливаем bacula на `makhota-server` с помощью скрипта [bacula-remote/setupserver.sh](bacula-remote/setupserver.sh), скрипт запускаем не в процессе создания терраформ, а после, так как требуются подтверждения и пароль для базы данных:
+Устанавливаем bacula на `makhota-server` с помощью скрипта [bacula-remote/setupserver.sh](bacula-remote/setupserver.sh), скрипт запускаем не в процессе создания `terraform`, а на уже созданной машине, так как требуются подтверждения и пароль для базы данных в процесее установки:
 
 ```bash
 #!/bin/bash
@@ -994,26 +1003,722 @@ sudo systemctl restart bacula-dir
 # Проверяем статус служб
 
 sudo service --status-all | grep bacula
+
 ```
-[1](bacula-remote/img1)
+[1](bacula-remote/img1.png)
 
-[2](bacula-remote/img2)
+[2](bacula-remote/img2.png)
 
-[3](bacula-remote/img3)
+[3](bacula-remote/img3.png)
 
-[4](bacula-remote/img4)
+[4](bacula-remote/img4.png)
 
-Тестируем через `bconsole`
+Тестируем через `bconsole`, в том числе команды `status`, `run`, `restore`
+
+Stdout
+
+Проверяем дирректорию хранения `/bacula`  на `makhota-server` и дирректории восстановления `/tmp/bacula-restores/` на `makhota-vm10` и `makhota-vm11`
+
+```bash
+
+ [ + ]  bacula-director
+ [ + ]  bacula-fd
+ [ + ]  bacula-sd
+user@makhota-server:~$ sudo bconsole
+Connecting to Director localhost:9101
+1000 OK: 103 makhota-server-dir Version: 9.6.7 (10 December 2020)
+Enter a period to cancel a command.
+*status
+Status available for:
+     1: Director
+     2: Storage
+     3: Client
+     4: Scheduled
+     5: Network
+     6: All
+Select daemon type for status (1-6): 6
+makhota-server-dir Version: 9.6.7 (10 December 2020) x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:14, conf reloaded 01-Feb-2023 22:14:28
+ Jobs: run=0, running=0 mode=0,0
+ Heap: heap=270,336 smbytes=60,148 max_bytes=60,148 bufs=301 max_bufs=306
+ Res: njobs=6 nclients=2 nstores=1 npools=2 ncats=1 nfsets=1 nscheds=1
+
+Scheduled Jobs:
+Level          Type     Pri  Scheduled          Job Name           Volume
+===================================================================================
+Incremental    Backup    10  01-Feb-23 23:05    BackupIncrementalmakhota-vm10 *unknown*
+Incremental    Backup    10  01-Feb-23 23:05    BackupFull-makhota-vm10 *unknown*
+Incremental    Backup    10  01-Feb-23 23:05    BackupIncrementalmakhota-vm11 *unknown*
+Incremental    Backup    10  01-Feb-23 23:05    BackupFull-makhota-vm11 *unknown*
+====
+
+Running Jobs:
+Console connected at 01-Feb-23 22:14
+No Jobs running.
+====
+No Terminated Jobs.
+====
+Connecting to Storage daemon makhota-server-sd at 10.128.0.103:9103
+
+makhota-server-sd Version: 9.6.7 (10 December 2020) x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:14. Jobs: run=0, running=0.
+ Heap: heap=106,496 smbytes=29,963 max_bytes=150,756 bufs=125 max_bufs=126
+ Sizes: boffset_t=8 size_t=8 int32_t=4 int64_t=8 mode=0,0 newbsr=0
+ Res: ndevices=1 nautochgr=0
+
+Running Jobs:
+No Jobs running.
+====
+
+Jobs waiting to reserve a drive:
+====
+
+Terminated Jobs:
+====
+
+Device status:
+
+Device File: "Local-Device" (/bacula) is not open.
+   Available Space=14.56 GB
+==
+====
+
+Used Volume status:
+====
+
+====
+
+Connecting to Client makhota-vm10-fd at 10.128.0.10:9102
+
+makhota-vm10-fd Version: 9.6.7 (10 December 2020)  x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:09. Jobs: run=0 running=0.
+ Heap: heap=106,496 smbytes=24,471 max_bytes=24,488 bufs=88 max_bufs=88
+ Sizes: boffset_t=8 size_t=8 debug=0 trace=0 mode=0,0 bwlimit=0kB/s
+ Plugin: bpipe-fd.so 
+
+Running Jobs:
+Director connected at: 01-Feb-23 22:14
+No Jobs running.
+====
+
+Terminated Jobs:
+====
+Connecting to Client makhota-vm11-fd at 10.128.0.11:9102
+
+makhota-vm11-fd Version: 9.6.7 (10 December 2020)  x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:10. Jobs: run=0 running=0.
+ Heap: heap=106,496 smbytes=24,471 max_bytes=24,488 bufs=88 max_bufs=88
+ Sizes: boffset_t=8 size_t=8 debug=0 trace=0 mode=0,0 bwlimit=0kB/s
+ Plugin: bpipe-fd.so 
+
+Running Jobs:
+Director connected at: 01-Feb-23 22:14
+No Jobs running.
+====
+
+Terminated Jobs:
+====
+*run
+Automatically selected Catalog: MyCatalog
+Using Catalog "MyCatalog"
+A job name must be specified.
+The defined Job resources are:
+     1: BackupIncrementalmakhota-vm10
+     2: BackupFull-makhota-vm10
+     3: Restore-makhota-vm10
+     4: BackupIncrementalmakhota-vm11
+     5: BackupFull-makhota-vm11
+     6: Restore-makhota-vm11
+Select Job resource (1-6): 2
+Run Backup job
+JobName:  BackupFull-makhota-vm10
+Level:    Full
+Client:   makhota-vm10-fd
+FileSet:  System
+Pool:     makhota-vm10-pool (From Job resource)
+Storage:  makhota-server-sd (From Job resource)
+When:     2023-02-01 22:14:57
+Priority: 10
+OK to run? (yes/mod/no): yes
+Job queued. JobId=1
+*run
+A job name must be specified.
+The defined Job resources are:
+     1: BackupIncrementalmakhota-vm10
+     2: BackupFull-makhota-vm10
+     3: Restore-makhota-vm10
+     4: BackupIncrementalmakhota-vm11
+     5: BackupFull-makhota-vm11
+     6: Restore-makhota-vm11
+Select Job resource (1-6): 5
+Run Backup job
+JobName:  BackupFull-makhota-vm11
+Level:    Full
+Client:   makhota-vm11-fd
+FileSet:  System
+Pool:     makhota-vm11-pool (From Job resource)
+Storage:  makhota-server-sd (From Job resource)
+When:     2023-02-01 22:15:11
+Priority: 10
+OK to run? (yes/mod/no): yes
+Job queued. JobId=2
+You have messages.
+*status
+Status available for:
+     1: Director
+     2: Storage
+     3: Client
+     4: Scheduled
+     5: Network
+     6: All
+Select daemon type for status (1-6): 3
+The defined Client resources are:
+     1: makhota-vm10-fd
+     2: makhota-vm11-fd
+Select Client (File daemon) resource (1-2): 1
+Connecting to Client makhota-vm10-fd at 10.128.0.10:9102
+
+makhota-vm10-fd Version: 9.6.7 (10 December 2020)  x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:09. Jobs: run=1 running=0.
+ Heap: heap=106,496 smbytes=122,390 max_bytes=328,817 bufs=103 max_bufs=129
+ Sizes: boffset_t=8 size_t=8 debug=0 trace=0 mode=0,0 bwlimit=0kB/s
+ Plugin: bpipe-fd.so 
+
+Running Jobs:
+Director connected at: 01-Feb-23 22:15
+No Jobs running.
+====
+
+Terminated Jobs:
+ JobId  Level    Files      Bytes   Status   Finished        Name 
+===================================================================
+     1  Full         19    11.22 K  OK       01-Feb-23 22:15 BackupFull-makhota-vm10
+====
+*status
+Status available for:
+     1: Director
+     2: Storage
+     3: Client
+     4: Scheduled
+     5: Network
+     6: All
+Select daemon type for status (1-6): 3
+The defined Client resources are:
+     1: makhota-vm10-fd
+     2: makhota-vm11-fd
+Select Client (File daemon) resource (1-2): 2
+Connecting to Client makhota-vm11-fd at 10.128.0.11:9102
+
+makhota-vm11-fd Version: 9.6.7 (10 December 2020)  x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:10. Jobs: run=1 running=0.
+ Heap: heap=106,496 smbytes=122,390 max_bytes=328,817 bufs=103 max_bufs=129
+ Sizes: boffset_t=8 size_t=8 debug=0 trace=0 mode=0,0 bwlimit=0kB/s
+ Plugin: bpipe-fd.so 
+
+Running Jobs:
+Director connected at: 01-Feb-23 22:15
+No Jobs running.
+====
+
+Terminated Jobs:
+ JobId  Level    Files      Bytes   Status   Finished        Name 
+===================================================================
+     2  Full         19    11.22 K  OK       01-Feb-23 22:15 BackupFull-makhota-vm11
+====
+*restore all
+
+First you select one or more JobIds that contain files
+to be restored. You will be presented several methods
+of specifying the JobIds. Then you will be allowed to
+select which files from those JobIds are to be restored.
+
+To select the JobIds, you have the following choices:
+     1: List last 20 Jobs run
+     2: List Jobs where a given File is saved
+     3: Enter list of comma separated JobIds to select
+     4: Enter SQL list command
+     5: Select the most recent backup for a client
+     6: Select backup for a client before a specified time
+     7: Enter a list of files to restore
+     8: Enter a list of files to restore before a specified time
+     9: Find the JobIds of the most recent backup for a client
+    10: Find the JobIds for a backup for a client before a specified time
+    11: Enter a list of directories to restore for found JobIds
+    12: Select full restore to a specified Job date
+    13: Cancel
+Select item:  (1-13): 3
+Enter JobId(s), comma separated, to restore: 1
+You have selected the following JobId: 1
+
+Building directory tree for JobId(s) 1 ...  
+17 files inserted into the tree and marked for extraction.
+
+You are now entering file selection mode where you add (mark) and
+remove (unmark) files to be restored. No files are initially added, unless
+you used the "all" keyword on the command line.
+Enter "done" to leave this mode.
+
+cwd is: /
+$ done
+Bootstrap records written to /var/lib/bacula/makhota-server-dir.restore.1.bsr
+
+The Job will require the following (*=>InChanger):
+   Volume(s)                 Storage(s)                SD Device(s)
+===========================================================================
+   
+    makhota-vm10-0001         makhota-server-sd         Local-Device             
+
+Volumes marked with "*" are in the Autochanger.
+
+
+19 files selected to be restored.
+
+The defined Restore Job resources are:
+     1: Restore-makhota-vm10
+     2: Restore-makhota-vm11
+Select Restore Job (1-2): 1
+Defined Clients:
+     1: makhota-server-fd
+     2: makhota-vm10-fd
+     3: makhota-vm11-fd
+Select the Client (1-3): 2
+Run Restore job
+JobName:         Restore-makhota-vm10
+Bootstrap:       /var/lib/bacula/makhota-server-dir.restore.1.bsr
+Where:           /tmp/bacula-restores/makhota-vm10
+Replace:         Always
+FileSet:         System
+Backup Client:   makhota-vm10-fd
+Restore Client:  makhota-vm10-fd
+Storage:         makhota-server-sd
+When:            2023-02-01 22:16:47
+Catalog:         MyCatalog
+Priority:        10
+Plugin Options:  *None*
+OK to run? (yes/mod/no): yes
+Job queued. JobId=3
+*restore all
+
+First you select one or more JobIds that contain files
+to be restored. You will be presented several methods
+of specifying the JobIds. Then you will be allowed to
+select which files from those JobIds are to be restored.
+
+To select the JobIds, you have the following choices:
+     1: List last 20 Jobs run
+     2: List Jobs where a given File is saved
+     3: Enter list of comma separated JobIds to select
+     4: Enter SQL list command
+     5: Select the most recent backup for a client
+     6: Select backup for a client before a specified time
+     7: Enter a list of files to restore
+     8: Enter a list of files to restore before a specified time
+     9: Find the JobIds of the most recent backup for a client
+    10: Find the JobIds for a backup for a client before a specified time
+    11: Enter a list of directories to restore for found JobIds
+    12: Select full restore to a specified Job date
+    13: Cancel
+Select item:  (1-13): 3
+Enter JobId(s), comma separated, to restore: 2
+You have selected the following JobId: 2
+
+Building directory tree for JobId(s) 2 ...  
+17 files inserted into the tree and marked for extraction.
+
+You are now entering file selection mode where you add (mark) and
+remove (unmark) files to be restored. No files are initially added, unless
+you used the "all" keyword on the command line.
+Enter "done" to leave this mode.
+
+cwd is: /
+$ done
+Bootstrap records written to /var/lib/bacula/makhota-server-dir.restore.2.bsr
+
+The Job will require the following (*=>InChanger):
+   Volume(s)                 Storage(s)                SD Device(s)
+===========================================================================
+   
+    makhota-vm11-0002         makhota-server-sd         Local-Device             
+
+Volumes marked with "*" are in the Autochanger.
+
+
+19 files selected to be restored.
+
+The defined Restore Job resources are:
+     1: Restore-makhota-vm10
+     2: Restore-makhota-vm11
+Select Restore Job (1-2): 2
+Defined Clients:
+     1: makhota-server-fd
+     2: makhota-vm10-fd
+     3: makhota-vm11-fd
+Select the Client (1-3): 3
+Run Restore job
+JobName:         Restore-makhota-vm11
+Bootstrap:       /var/lib/bacula/makhota-server-dir.restore.2.bsr
+Where:           /tmp/bacula-restores/makhota-vm11
+Replace:         Always
+FileSet:         System
+Backup Client:   makhota-vm11-fd
+Restore Client:  makhota-vm11-fd
+Storage:         makhota-server-sd
+When:            2023-02-01 22:17:13
+Catalog:         MyCatalog
+Priority:        10
+Plugin Options:  *None*
+OK to run? (yes/mod/no): yes
+Job queued. JobId=4
+*status
+Status available for:
+     1: Director
+     2: Storage
+     3: Client
+     4: Scheduled
+     5: Network
+     6: All
+Select daemon type for status (1-6): 6
+makhota-server-dir Version: 9.6.7 (10 December 2020) x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:14, conf reloaded 01-Feb-2023 22:14:28
+ Jobs: run=4, running=0 mode=0,0
+ Heap: heap=221,184 smbytes=109,382 max_bytes=1,255,554 bufs=400 max_bufs=426
+ Res: njobs=6 nclients=2 nstores=1 npools=2 ncats=1 nfsets=1 nscheds=1
+
+Scheduled Jobs:
+Level          Type     Pri  Scheduled          Job Name           Volume
+===================================================================================
+Incremental    Backup    10  01-Feb-23 23:05    BackupIncrementalmakhota-vm10 makhota-vm10-0001
+Incremental    Backup    10  01-Feb-23 23:05    BackupFull-makhota-vm10 makhota-vm10-0001
+Incremental    Backup    10  01-Feb-23 23:05    BackupIncrementalmakhota-vm11 makhota-vm11-0002
+Incremental    Backup    10  01-Feb-23 23:05    BackupFull-makhota-vm11 makhota-vm11-0002
+====
+
+Running Jobs:
+Console connected at 01-Feb-23 22:14
+No Jobs running.
+====
+
+Terminated Jobs:
+ JobId  Level      Files    Bytes   Status   Finished        Name 
+====================================================================
+     1  Full          19    11.22 K  OK       01-Feb-23 22:15 BackupFull-makhota-vm10
+     2  Full          19    11.22 K  OK       01-Feb-23 22:15 BackupFull-makhota-vm11
+     3  Restore       19    11.22 K  OK       01-Feb-23 22:16 Restore-makhota-vm10
+     4  Restore       19    11.22 K  OK       01-Feb-23 22:17 Restore-makhota-vm11
+
+====
+Connecting to Storage daemon makhota-server-sd at 10.128.0.103:9103
+
+makhota-server-sd Version: 9.6.7 (10 December 2020) x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:14. Jobs: run=4, running=0.
+ Heap: heap=106,496 smbytes=240,348 max_bytes=383,049 bufs=146 max_bufs=174
+ Sizes: boffset_t=8 size_t=8 int32_t=4 int64_t=8 mode=0,0 newbsr=0
+ Res: ndevices=1 nautochgr=0
+
+Running Jobs:
+No Jobs running.
+====
+
+Jobs waiting to reserve a drive:
+====
+
+Terminated Jobs:
+ JobId  Level    Files      Bytes   Status   Finished        Name 
+===================================================================
+     1  Full         19    13.11 K  OK       01-Feb-23 22:15 BackupFull-makhota-vm10
+     2  Full         19    13.11 K  OK       01-Feb-23 22:15 BackupFull-makhota-vm11
+     3  Rest         19    13.11 K  OK       01-Feb-23 22:16 Restore-makhota-vm10
+     4  Rest         19    13.11 K  OK       01-Feb-23 22:17 Restore-makhota-vm11
+====
+
+Device status:
+
+Device File: "Local-Device" (/bacula) is not open.
+   Available Space=14.56 GB
+==
+====
+
+Used Volume status:
+====
+
+Attr spooling: 0 active jobs, 7,674 bytes; 2 total jobs, 7,674 max bytes.
+====
+
+Connecting to Client makhota-vm10-fd at 10.128.0.10:9102
+
+makhota-vm10-fd Version: 9.6.7 (10 December 2020)  x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:09. Jobs: run=2 running=0.
+ Heap: heap=106,496 smbytes=312,217 max_bytes=385,369 bufs=106 max_bufs=129
+ Sizes: boffset_t=8 size_t=8 debug=0 trace=0 mode=0,0 bwlimit=0kB/s
+ Plugin: bpipe-fd.so 
+
+Running Jobs:
+Director connected at: 01-Feb-23 22:17
+No Jobs running.
+====
+
+Terminated Jobs:
+ JobId  Level    Files      Bytes   Status   Finished        Name 
+===================================================================
+     1  Full         19    11.22 K  OK       01-Feb-23 22:15 BackupFull-makhota-vm10
+     3  Rest         19    11.22 K  OK       01-Feb-23 22:16 Restore-makhota-vm10
+====
+Connecting to Client makhota-vm11-fd at 10.128.0.11:9102
+
+makhota-vm11-fd Version: 9.6.7 (10 December 2020)  x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 22:10. Jobs: run=2 running=0.
+ Heap: heap=106,496 smbytes=312,217 max_bytes=385,369 bufs=106 max_bufs=129
+ Sizes: boffset_t=8 size_t=8 debug=0 trace=0 mode=0,0 bwlimit=0kB/s
+ Plugin: bpipe-fd.so 
+
+Running Jobs:
+Director connected at: 01-Feb-23 22:17
+No Jobs running.
+====
+
+Terminated Jobs:
+ JobId  Level    Files      Bytes   Status   Finished        Name 
+===================================================================
+     2  Full         19    11.22 K  OK       01-Feb-23 22:15 BackupFull-makhota-vm11
+     4  Rest         19    11.22 K  OK       01-Feb-23 22:17 Restore-makhota-vm11
+====
+*q
+user@makhota-server:~$ ls -la /bacula/
+ls: cannot open directory '/bacula/': Permission denied
+user@makhota-server:~$ sudo ls -la /bacula/
+total 40
+drwx------  2 bacula bacula  4096 Feb  1 22:15 .
+drwxr-xr-x 19 root   root    4096 Feb  1 22:14 ..
+-rw-r-----  1 bacula tape   14478 Feb  1 22:15 makhota-vm10-0001
+-rw-r-----  1 bacula tape   14478 Feb  1 22:15 makhota-vm11-0002
+user@makhota-server:~$ ^C
+user@makhota-server:~$ 
+
+```
+
+```bash
+user@makhota-vm10:~$ sudo ls -la /tmp/bacula-restores/makhota-vm10/etc/default
+total 76
+drwxr-xr-x 3 root root 4096 Feb  1 22:09 .
+drwxr-xr-x 3 root root 4096 Feb  1 22:16 ..
+-rw-r--r-- 1 root root  346 Aug 19  2019 acpid
+-rw------- 1 root root  214 Feb  1 22:09 bacula-fd
+-rw-r--r-- 1 root root  285 Dec 28  2021 console-setup
+-rw-r--r-- 1 root root  955 Feb 23  2021 cron
+-rw-r--r-- 1 root root  297 Feb 21  2021 dbus
+-rw-r--r-- 1 root root 1225 Dec  4 18:17 grub
+drwxr-xr-x 2 root root 4096 Dec  4 18:17 grub.d
+-rw-r--r-- 1 root root 1225 Dec  4 18:17 grub.ucf-dist
+-rw-r--r-- 1 root root   81 Jul 28  2021 hwclock
+-rw-r--r-- 1 root root  150 Dec 28  2021 keyboard
+-rw-r--r-- 1 root root   54 Dec 28  2021 locale
+-rw-r--r-- 1 root root 1032 Sep 21  2020 networking
+-rw-r--r-- 1 root root 1756 Oct  2  2021 nss
+-rw-r--r-- 1 root root   15 Sep 23  2020 ntp
+-rw-r--r-- 1 root root 2062 Sep 18  2021 rsync
+-rw-r--r-- 1 root root  133 Mar 13  2021 ssh
+-rw-r--r-- 1 root root 1118 Feb  7  2020 useradd
+```
+
+```bash
+user@makhota-vm11:~$ sudo ls -la /tmp/bacula-restores/makhota-vm11/etc/default
+total 76
+drwxr-xr-x 3 root root 4096 Feb  1 22:09 .
+drwxr-xr-x 3 root root 4096 Feb  1 22:17 ..
+-rw-r--r-- 1 root root  346 Aug 19  2019 acpid
+-rw------- 1 root root  214 Feb  1 22:09 bacula-fd
+-rw-r--r-- 1 root root  285 Dec 28  2021 console-setup
+-rw-r--r-- 1 root root  955 Feb 23  2021 cron
+-rw-r--r-- 1 root root  297 Feb 21  2021 dbus
+-rw-r--r-- 1 root root 1225 Dec  4 18:17 grub
+drwxr-xr-x 2 root root 4096 Dec  4 18:17 grub.d
+-rw-r--r-- 1 root root 1225 Dec  4 18:17 grub.ucf-dist
+-rw-r--r-- 1 root root   81 Jul 28  2021 hwclock
+-rw-r--r-- 1 root root  150 Dec 28  2021 keyboard
+-rw-r--r-- 1 root root   54 Dec 28  2021 locale
+-rw-r--r-- 1 root root 1032 Sep 21  2020 networking
+-rw-r--r-- 1 root root 1756 Oct  2  2021 nss
+-rw-r--r-- 1 root root   15 Sep 23  2020 ntp
+-rw-r--r-- 1 root root 2062 Sep 18  2021 rsync
+-rw-r--r-- 1 root root  133 Mar 13  2021 ssh
+-rw-r--r-- 1 root root 1118 Feb  7  2020 useradd
+```
+
+Логи
+
+```bash 
+sudo cat /var/log/bacula/bacula.log
+```
 
 Stdout
 
 ```bash
+user@makhota-server:~$ sudo cat /var/log/bacula/bacula.log
+01-Feb 22:15 makhota-server-dir JobId 1: Start Backup JobId 1, Job=BackupFull-makhota-vm10.2023-02-01_22.15.00_03
+01-Feb 22:15 makhota-server-dir JobId 1: Created new Volume="makhota-vm10-0001", Pool="makhota-vm10-pool", MediaType="File" in catalog.
+01-Feb 22:15 makhota-server-dir JobId 1: Using Device "Local-Device" to write.
+01-Feb 22:15 makhota-server-sd JobId 1: Labeled new Volume "makhota-vm10-0001" on File device "Local-Device" (/bacula).
+01-Feb 22:15 makhota-server-sd JobId 1: Wrote label to prelabeled Volume "makhota-vm10-0001" on File device "Local-Device" (/bacula)
+01-Feb 22:15 makhota-server-sd JobId 1: Elapsed time=00:00:01, Transfer rate=13.11 K Bytes/second
+01-Feb 22:15 makhota-server-sd JobId 1: Sending spooled attrs to the Director. Despooling 3,837 bytes ...
+01-Feb 22:15 makhota-server-dir JobId 1: Bacula makhota-server-dir 9.6.7 (10Dec20):
+  Build OS:               x86_64-pc-linux-gnu debian bullseye/sid
+  JobId:                  1
+  Job:                    BackupFull-makhota-vm10.2023-02-01_22.15.00_03
+  Backup Level:           Full
+  Client:                 "makhota-vm10-fd" 9.6.7 (10Dec20) x86_64-pc-linux-gnu,debian,bullseye/sid
+  FileSet:                "System" 2023-02-01 22:15:00
+  Pool:                   "makhota-vm10-pool" (From Job resource)
+  Catalog:                "MyCatalog" (From Client resource)
+  Storage:                "makhota-server-sd" (From Job resource)
+  Scheduled time:         01-Feb-2023 22:14:57
+  Start time:             01-Feb-2023 22:15:02
+  End time:               01-Feb-2023 22:15:02
+  Elapsed time:           1 sec
+  Priority:               10
+  FD Files Written:       19
+  SD Files Written:       19
+  FD Bytes Written:       11,222 (11.22 KB)
+  SD Bytes Written:       13,115 (13.11 KB)
+  Rate:                   11.2 KB/s
+  Software Compression:   None
+  Comm Line Compression:  18.3% 1.2:1
+  Snapshot/VSS:           no
+  Encryption:             no
+  Accurate:               no
+  Volume name(s):         makhota-vm10-0001
+  Volume Session Id:      1
+  Volume Session Time:    1675278868
+  Last Volume Bytes:      14,478 (14.47 KB)
+  Non-fatal FD errors:    0
+  SD Errors:              0
+  FD termination status:  OK
+  SD termination status:  OK
+  Termination:            Backup OK
 
+01-Feb 22:15 makhota-server-dir JobId 1: Begin pruning Jobs older than 6 months .
+01-Feb 22:15 makhota-server-dir JobId 1: No Jobs found to prune.
+01-Feb 22:15 makhota-server-dir JobId 1: Begin pruning Files.
+01-Feb 22:15 makhota-server-dir JobId 1: No Files found to prune.
+01-Feb 22:15 makhota-server-dir JobId 1: End auto prune.
+
+01-Feb 22:15 makhota-server-dir JobId 2: Start Backup JobId 2, Job=BackupFull-makhota-vm11.2023-02-01_22.15.13_04
+01-Feb 22:15 makhota-server-dir JobId 2: Created new Volume="makhota-vm11-0002", Pool="makhota-vm11-pool", MediaType="File" in catalog.
+01-Feb 22:15 makhota-server-dir JobId 2: Using Device "Local-Device" to write.
+01-Feb 22:15 makhota-server-sd JobId 2: Labeled new Volume "makhota-vm11-0002" on File device "Local-Device" (/bacula).
+01-Feb 22:15 makhota-server-sd JobId 2: Wrote label to prelabeled Volume "makhota-vm11-0002" on File device "Local-Device" (/bacula)
+01-Feb 22:15 makhota-server-sd JobId 2: Elapsed time=00:00:01, Transfer rate=13.11 K Bytes/second
+01-Feb 22:15 makhota-server-sd JobId 2: Sending spooled attrs to the Director. Despooling 3,837 bytes ...
+01-Feb 22:15 makhota-server-dir JobId 2: Bacula makhota-server-dir 9.6.7 (10Dec20):
+  Build OS:               x86_64-pc-linux-gnu debian bullseye/sid
+  JobId:                  2
+  Job:                    BackupFull-makhota-vm11.2023-02-01_22.15.13_04
+  Backup Level:           Full
+  Client:                 "makhota-vm11-fd" 9.6.7 (10Dec20) x86_64-pc-linux-gnu,debian,bullseye/sid
+  FileSet:                "System" 2023-02-01 22:15:00
+  Pool:                   "makhota-vm11-pool" (From Job resource)
+  Catalog:                "MyCatalog" (From Client resource)
+  Storage:                "makhota-server-sd" (From Job resource)
+  Scheduled time:         01-Feb-2023 22:15:11
+  Start time:             01-Feb-2023 22:15:15
+  End time:               01-Feb-2023 22:15:15
+  Elapsed time:           1 sec
+  Priority:               10
+  FD Files Written:       19
+  SD Files Written:       19
+  FD Bytes Written:       11,222 (11.22 KB)
+  SD Bytes Written:       13,115 (13.11 KB)
+  Rate:                   11.2 KB/s
+  Software Compression:   None
+  Comm Line Compression:  18.3% 1.2:1
+  Snapshot/VSS:           no
+  Encryption:             no
+  Accurate:               no
+  Volume name(s):         makhota-vm11-0002
+  Volume Session Id:      2
+  Volume Session Time:    1675278868
+  Last Volume Bytes:      14,478 (14.47 KB)
+  Non-fatal FD errors:    0
+  SD Errors:              0
+  FD termination status:  OK
+  SD termination status:  OK
+  Termination:            Backup OK
+
+01-Feb 22:15 makhota-server-dir JobId 2: Begin pruning Jobs older than 6 months .
+01-Feb 22:15 makhota-server-dir JobId 2: No Jobs found to prune.
+01-Feb 22:15 makhota-server-dir JobId 2: Begin pruning Files.
+01-Feb 22:15 makhota-server-dir JobId 2: No Files found to prune.
+01-Feb 22:15 makhota-server-dir JobId 2: End auto prune.
+
+01-Feb 22:16 makhota-server-dir JobId 3: Start Restore Job Restore-makhota-vm10.2023-02-01_22.16.50_05
+01-Feb 22:16 makhota-server-dir JobId 3: Restoring files from JobId(s) 1
+01-Feb 22:16 makhota-server-dir JobId 3: Using Device "Local-Device" to read.
+01-Feb 22:16 makhota-server-sd JobId 3: Ready to read from volume "makhota-vm10-0001" on File device "Local-Device" (/bacula).
+01-Feb 22:16 makhota-server-sd JobId 3: Forward spacing Volume "makhota-vm10-0001" to addr=253
+01-Feb 22:16 makhota-server-sd JobId 3: End of Volume "makhota-vm10-0001" at addr=14478 on device "Local-Device" (/bacula).
+01-Feb 22:16 makhota-server-sd JobId 3: Elapsed time=00:00:01, Transfer rate=13.11 K Bytes/second
+01-Feb 22:16 makhota-server-dir JobId 3: Bacula makhota-server-dir 9.6.7 (10Dec20):
+  Build OS:               x86_64-pc-linux-gnu debian bullseye/sid
+  JobId:                  3
+  Job:                    Restore-makhota-vm10.2023-02-01_22.16.50_05
+  Restore Client:         makhota-vm10-fd
+  Where:                  /tmp/bacula-restores/makhota-vm10
+  Replace:                Always
+  Start time:             01-Feb-2023 22:16:52
+  End time:               01-Feb-2023 22:16:52
+  Elapsed time:           1 sec
+  Files Expected:         19
+  Files Restored:         19
+  Bytes Restored:         11,222 (11.22 KB)
+  Rate:                   11.2 KB/s
+  FD Errors:              0
+  FD termination status:  OK
+  SD termination status:  OK
+  Termination:            Restore OK
+
+01-Feb 22:16 makhota-server-dir JobId 3: Begin pruning Jobs older than 6 months .
+01-Feb 22:16 makhota-server-dir JobId 3: No Jobs found to prune.
+01-Feb 22:16 makhota-server-dir JobId 3: Begin pruning Files.
+01-Feb 22:16 makhota-server-dir JobId 3: No Files found to prune.
+01-Feb 22:16 makhota-server-dir JobId 3: End auto prune.
+
+01-Feb 22:17 makhota-server-dir JobId 4: Start Restore Job Restore-makhota-vm11.2023-02-01_22.17.15_06
+01-Feb 22:17 makhota-server-dir JobId 4: Restoring files from JobId(s) 2
+01-Feb 22:17 makhota-server-dir JobId 4: Using Device "Local-Device" to read.
+01-Feb 22:17 makhota-server-sd JobId 4: Ready to read from volume "makhota-vm11-0002" on File device "Local-Device" (/bacula).
+01-Feb 22:17 makhota-server-sd JobId 4: Forward spacing Volume "makhota-vm11-0002" to addr=253
+01-Feb 22:17 makhota-server-sd JobId 4: End of Volume "makhota-vm11-0002" at addr=14478 on device "Local-Device" (/bacula).
+01-Feb 22:17 makhota-server-sd JobId 4: Elapsed time=00:00:01, Transfer rate=13.11 K Bytes/second
+01-Feb 22:17 makhota-server-dir JobId 4: Bacula makhota-server-dir 9.6.7 (10Dec20):
+  Build OS:               x86_64-pc-linux-gnu debian bullseye/sid
+  JobId:                  4
+  Job:                    Restore-makhota-vm11.2023-02-01_22.17.15_06
+  Restore Client:         makhota-vm11-fd
+  Where:                  /tmp/bacula-restores/makhota-vm11
+  Replace:                Always
+  Start time:             01-Feb-2023 22:17:17
+  End time:               01-Feb-2023 22:17:17
+  Elapsed time:           1 sec
+  Files Expected:         19
+  Files Restored:         19
+  Bytes Restored:         11,222 (11.22 KB)
+  Rate:                   11.2 KB/s
+  FD Errors:              0
+  FD termination status:  OK
+  SD termination status:  OK
+  Termination:            Restore OK
+
+01-Feb 22:17 makhota-server-dir JobId 4: Begin pruning Jobs older than 6 months .
+01-Feb 22:17 makhota-server-dir JobId 4: No Jobs found to prune.
+01-Feb 22:17 makhota-server-dir JobId 4: Begin pruning Files.
+01-Feb 22:17 makhota-server-dir JobId 4: No Files found to prune.
+01-Feb 22:17 makhota-server-dir JobId 4: End auto prune.
 
 ```
 
 Использованные источники:
 
+\- [Презентация "Отказоустойчивость: Резервное копирование. Bacula", Александр Зубарев](https://u.netology.ru/backend/uploads/lms/attachments/files/data/27925/SRLB-9__%D0%A0%D0%B5%D0%B7%D0%B5%D1%80%D0%B2%D0%BD%D0%BE%D0%B5_%D0%BA%D0%BE%D0%BF%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5._Bacula.pdf)
 
 \- https://www.bacula.org/13.0.x-manuals/en/main/Brief_Tutorial.html
 
