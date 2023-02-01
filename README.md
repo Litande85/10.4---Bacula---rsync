@@ -1005,13 +1005,13 @@ sudo systemctl restart bacula-dir
 sudo service --status-all | grep bacula
 
 ```
-[1](bacula-remote/img1.png)
+![1](bacula-remote/img1.png)
 
-[2](bacula-remote/img2.png)
+![2](bacula-remote/img2.png)
 
-[3](bacula-remote/img3.png)
+![3](bacula-remote/img3.png)
 
-[4](bacula-remote/img4.png)
+![4](bacula-remote/img4.png)
 
 Тестируем через `bconsole`, в том числе команды `status`, `run`, `restore`
 
