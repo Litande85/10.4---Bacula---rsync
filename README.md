@@ -1013,7 +1013,7 @@ sudo service --status-all | grep bacula
 
 ![4](bacula-remote/img4.png)
 
-Тестируем через `bconsole`, в том числе команды `status`, `run`, `restore`
+После установки тестируем архивирование и восстановление через `bconsole`, в том числе используем команды `status`, `run`, `restore`
 
 Stdout
 
@@ -1715,6 +1715,115 @@ user@makhota-server:~$ sudo cat /var/log/bacula/bacula.log
 01-Feb 22:17 makhota-server-dir JobId 4: End auto prune.
 
 ```
+
+Мы также можем добавить к архивированию на наш сервер `makhota-server` любую дополнительную машину.
+Копируем скрипты на машину, которую хотим архивировать:
+
+```bash
+scp -r  /home/user/terraform/checked-versions/bacula-remote/ user@10.128.0.12:/home/user/bacula-remote/
+```
+
+Запускаем на дополнительной машине  `add-vm 10.128.0.12` скрипт [bacula-remote/addclient.sh](bacula-remote/addclient.sh).
+
+Проверяем статус `bacula-fd`.
+
+```bash
+
+user@add-vm:~$ sudo systemctl status bacula-fd
+● bacula-fd.service - Bacula File Daemon service
+     Loaded: loaded (/lib/systemd/system/bacula-fd.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2023-02-01 19:53:38 UTC; 24s ago
+       Docs: man:bacula-fd(8)
+    Process: 1577 ExecStartPre=/usr/sbin/bacula-fd -t -c $CONFIG (code=exited, status=0/SUCCESS)
+   Main PID: 1578 (bacula-fd)
+      Tasks: 2 (limit: 2340)
+     Memory: 944.0K
+        CPU: 7ms
+     CGroup: /system.slice/bacula-fd.service
+             └─1578 /usr/sbin/bacula-fd -fP -c /etc/bacula/bacula-fd.conf
+
+Feb 01 19:53:38 add-vm systemd[1]: Starting Bacula File Daemon service...
+Feb 01 19:53:38 add-vm systemd[1]: Started Bacula File Daemon service.
+
+```
+
+Создаем резервную копию для дополнительной машины `add-vm 10.128.0.12` на `makhota-server` с помощью `bconsole`:
+
+Stdout
+
+```bash
+
+user@makhota-server:~$ sudo bconsole
+Connecting to Director localhost:9101
+1000 OK: 103 makhota-server-dir Version: 9.6.7 (10 December 2020)
+Enter a period to cancel a command.
+
+*run
+Automatically selected Catalog: MyCatalog
+Using Catalog "MyCatalog"
+A job name must be specified.
+The defined Job resources are:
+     1: BackupIncrementalmakhota-vm10
+     2: BackupFull-makhota-vm10
+     3: Restore-makhota-vm10
+     4: BackupIncrementalmakhota-vm11
+     5: BackupFull-makhota-vm11
+     6: Restore-makhota-vm11
+     7: BackupIncrementaladditional-vm
+     8: BackupFull-additional-vm
+     9: Restore-additional-vm
+    10: BackupIncrementaladd-vm
+    11: BackupFull-add-vm
+    12: Restore-add-vm
+Select Job resource (1-12): 11
+Run Backup job
+JobName:  BackupFull-add-vm
+Level:    Full
+Client:   add-vm-fd
+FileSet:  System
+Pool:     add-vm-pool (From Job resource)
+Storage:  makhota-server-sd (From Job resource)
+When:     2023-02-01 22:55:49
+Priority: 10
+OK to run? (yes/mod/no): yes
+Job queued. JobId=5
+*status
+Status available for:
+     1: Director
+     2: Storage
+     3: Client
+     4: Scheduled
+     5: Network
+     6: All
+Select daemon type for status (1-6): 3
+The defined Client resources are:
+     1: makhota-vm10-fd
+     2: makhota-vm11-fd
+     3: additional-vm-fd
+     4: add-vm-fd
+Select Client (File daemon) resource (1-4): 4
+Connecting to Client add-vm-fd at 10.128.0.12:9102
+
+add-vm-fd Version: 9.6.7 (10 December 2020)  x86_64-pc-linux-gnu debian bullseye/sid
+Daemon started 01-Feb-23 19:53. Jobs: run=1 running=0.
+ Heap: heap=106,496 smbytes=122,348 max_bytes=328,775 bufs=103 max_bufs=129
+ Sizes: boffset_t=8 size_t=8 debug=0 trace=0 mode=0,0 bwlimit=0kB/s
+ Plugin: bpipe-fd.so 
+
+Running Jobs:
+Director connected at: 01-Feb-23 19:56
+No Jobs running.
+====
+
+Terminated Jobs:
+ JobId  Level    Files      Bytes   Status   Finished        Name 
+===================================================================
+     5  Full         19    11.22 K  OK       01-Feb-23 19:55 BackupFull-add-vm
+====
+*
+```
+
+
 
 Использованные источники:
 
